@@ -10,7 +10,7 @@ function isFestivo(fechaStr) {
     return dow === 0;
 }
 
-function calculateHourlyRate(salarioMensual, weeklyHours = 42) {
+function calculateHourlyRate(salarioMensual, weeklyHours = 44) {
     if (!salarioMensual || salarioMensual <= 0) return 0;
     const annual = salarioMensual * 12;
     const totalHoursYear = weeklyHours * 52;
@@ -26,7 +26,83 @@ function calculateIBC(salarioMensual) {
 function baseHoursForTurno(turno) {
     if (turno === 'descanso') return 0;
     if (turno === 'vacaciones') return 8;
+    if (turno === 'reduccion') return 4;
     return 8;
+}
+
+const MAX_WEEKLY_HOURS = 44;
+const WORK_TURNOS = new Set(["am", "pm", "reduccion", "nocturno"]);
+const NIGHT_START_HOUR = 21;
+const NIGHT_END_HOUR = 6;
+
+function isNocturnoTurno(turno) {
+    return turno === 'nocturno';
+}
+
+function getShiftSchedule(turno) {
+    switch (turno) {
+        case 'am':
+            return { start: 6, end: 14, overnight: false };
+        case 'pm':
+            return { start: 14, end: 22, overnight: false };
+        case 'reduccion':
+            return { start: 16, end: 20, overnight: false };
+        case 'nocturno':
+            return { start: 22, end: 6, overnight: true };
+        case 'vacaciones':
+            return { start: 8, end: 16, overnight: false };
+        default:
+            return null;
+    }
+}
+
+function calcNightHoursForTurno(turno, baseH) {
+    if (!baseH) return 0;
+    const schedule = getShiftSchedule(turno);
+    if (!schedule) return 0;
+
+    const nightSegments = [
+        { start: NIGHT_START_HOUR, end: 24 },
+        { start: 0, end: NIGHT_END_HOUR }
+    ];
+
+    const shiftSegments = schedule.overnight
+        ? [
+            { start: schedule.start, end: 24 },
+            { start: 0, end: schedule.end }
+        ]
+        : [{ start: schedule.start, end: schedule.end }];
+
+    let nightHours = 0;
+    shiftSegments.forEach(shift => {
+        nightSegments.forEach(night => {
+            const overlapStart = Math.max(shift.start, night.start);
+            const overlapEnd = Math.min(shift.end, night.end);
+            if (overlapEnd > overlapStart) nightHours += (overlapEnd - overlapStart);
+        });
+    });
+
+    return Math.min(baseH, nightHours);
+}
+
+function parseDateUTC(fechaStr) {
+    const parts = fechaStr.split('-').map(Number);
+    return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+}
+
+function formatDateUTC(dateObj) {
+    const y = dateObj.getUTCFullYear();
+    const m = (dateObj.getUTCMonth() + 1).toString().padStart(2, '0');
+    const d = dateObj.getUTCDate().toString().padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function getWeekStartUTC(dateObj) {
+    const dow = dateObj.getUTCDay();
+    const diff = (dow + 6) % 7; // Monday-based week start
+    const ws = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate()));
+    ws.setUTCDate(ws.getUTCDate() - diff);
+    return formatDateUTC(ws);
 }
 
 // Tarifas y recargos: valores según normativa (configurables)
@@ -39,9 +115,9 @@ function overtimeFactor(turno, esFestivoDia) {
     // - Extra nocturna en día ordinario: 1.75
     // - Extra en festivo (diurna): 2.00
     // - Extra nocturna en festivo: 2.50
-    if (esFestivoDia && turno === 'nocturno') return 2.5;
+    if (esFestivoDia && isNocturnoTurno(turno)) return 2.5;
     if (esFestivoDia) return 2.0;
-    if (turno === 'nocturno') return 1.75;
+    if (isNocturnoTurno(turno)) return 1.75;
     return 1.25;
 }
 
@@ -49,36 +125,77 @@ function calculateDayPayment(fechaStr, config, salarioMensual) {
     const hourly = calculateHourlyRate(salarioMensual);
     const esFest = isFestivo(fechaStr);
     const baseH = baseHoursForTurno(config.turno);
-    // Calcular recargo sobre hora base
-    let baseMultiplier = 1;
-    if (config.turno === 'nocturno') baseMultiplier += NIGHT_SURCHARGE;
-    if (esFest) baseMultiplier += FESTIVE_SURCHARGE;
-    const effectiveHourly = hourly * baseMultiplier;
-    const basePago = baseH * effectiveHourly;
     const basePagoSinRecargo = baseH * hourly;
-    const recargo = basePago - basePagoSinRecargo;
+    const nightHours = calcNightHoursForTurno(config.turno, baseH);
+    const recargoNocturno = nightHours * hourly * NIGHT_SURCHARGE;
+    const recargoFestivo = esFest ? (baseH * hourly * FESTIVE_SURCHARGE) : 0;
+    const recargo = recargoNocturno + recargoFestivo;
+    const basePago = basePagoSinRecargo + recargo;
+    const effectiveHourly = baseH > 0 ? (basePago / baseH) : hourly;
+    const baseMultiplier = hourly > 0 ? (effectiveHourly / hourly) : 1;
     const extras = config.extras || 0;
     const factor = overtimeFactor(config.turno, esFest);
     const extrasPago = extras * hourly * factor;
-    return { basePago, basePagoSinRecargo, recargo, extrasPago, brutoDia: basePago + extrasPago, hourly, effectiveHourly, baseMultiplier, baseH, factor, esFest };
+    return { basePago, basePagoSinRecargo, recargo, recargoNocturno, recargoFestivo, extrasPago, brutoDia: basePago + extrasPago, hourly, effectiveHourly, baseMultiplier, baseH, factor, esFest, nightHours };
 }
 
 function calculatePayrollSummary(year, monthIndex, dbState) {
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
     let totalBase = 0, totalExtras = 0;
     let totalExtrasCount = 0;
+    let totalNightHours = 0;
+    let totalRecargoNocturno = 0;
+    let totalRecargoFestivo = 0;
     const rows = [];
     let totalRecargos = 0;
+
+    const dayList = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+        const fecha = `${year}-${(monthIndex+1).toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+        const dateObj = parseDateUTC(fecha);
+        const conf = dbState.diasConfig[fecha] || { turno: 'descanso', extras: 0 };
+        const baseH = baseHoursForTurno(conf.turno);
+        const weeklyBaseH = WORK_TURNOS.has(conf.turno) ? baseH : 0;
+        dayList.push({ fecha, dateObj, conf, weeklyBaseH });
+    }
+
+    const weeks = new Map();
+    dayList.forEach(day => {
+        const weekStart = getWeekStartUTC(day.dateObj);
+        if (!weeks.has(weekStart)) weeks.set(weekStart, []);
+        weeks.get(weekStart).push(day);
+    });
+
+    const autoExtrasByDate = {};
+    weeks.forEach(days => {
+        let weeklyHours = 0;
+        days.sort((a, b) => a.dateObj - b.dateObj);
+        for (const day of days) {
+            if (day.weeklyBaseH > 0) {
+                weeklyHours += day.weeklyBaseH;
+                if (weeklyHours > MAX_WEEKLY_HOURS) {
+                    const overflow = weeklyHours - MAX_WEEKLY_HOURS;
+                    const autoH = Math.min(day.weeklyBaseH, overflow);
+                    autoExtrasByDate[day.fecha] = (autoExtrasByDate[day.fecha] || 0) + autoH;
+                }
+            }
+        }
+    });
 
     for (let d = 1; d <= daysInMonth; d++) {
         const fecha = `${year}-${(monthIndex+1).toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
         const conf = dbState.diasConfig[fecha] || { turno: 'descanso', extras: 0 };
-        const pago = calculateDayPayment(fecha, conf, dbState.salario || 0);
+        const autoExtras = autoExtrasByDate[fecha] || 0;
+        const extrasTotal = (conf.extras || 0) + autoExtras;
+        const pago = calculateDayPayment(fecha, { ...conf, extras: extrasTotal }, dbState.salario || 0);
         totalBase += pago.basePago;
         totalExtras += pago.extrasPago;
-        totalExtrasCount += conf.extras || 0;
+        totalExtrasCount += extrasTotal;
+        totalNightHours += pago.nightHours || 0;
+        totalRecargoNocturno += pago.recargoNocturno || 0;
+        totalRecargoFestivo += pago.recargoFestivo || 0;
         totalRecargos += pago.recargo || 0;
-        rows.push({ fecha, turno: conf.turno, extras: conf.extras || 0, brutoDia: pago.brutoDia, esFest: pago.esFest });
+        rows.push({ fecha, turno: conf.turno, extras: extrasTotal, brutoDia: pago.brutoDia, esFest: pago.esFest, nightHours: pago.nightHours || 0, recargoNocturno: pago.recargoNocturno || 0, recargoFestivo: pago.recargoFestivo || 0, recargo: pago.recargo || 0 });
     }
 
     const salarioBase = dbState.salario || 0;
@@ -92,7 +209,7 @@ function calculatePayrollSummary(year, monthIndex, dbState) {
     const descuentos = salud + pension;
     const neto = brutoMensual - descuentos;
 
-    return { rows, totalBase, totalExtras, totalExtrasCount, totalRecargos, brutoParaAux, incluyeAux, brutoMensual, ibc, salud, pension, descuentos, neto };
+    return { rows, totalBase, totalExtras, totalExtrasCount, totalNightHours, totalRecargoNocturno, totalRecargoFestivo, totalRecargos, brutoParaAux, incluyeAux, brutoMensual, ibc, salud, pension, descuentos, neto };
 }
 
 // Exponer en global para uso sin módulos
