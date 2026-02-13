@@ -1,4 +1,4 @@
-# NóminaPro
+# Despachopago
 
 Aplicación cliente para cálculo de nómina y calendario de turnos (prototipo).
 
@@ -17,5 +17,6 @@ Archivos clave
 - `style.css` — estilos
 - `script.js` — lógica UI y autenticación local
 - `calculations.js` — motor de cálculo
+
 
 
