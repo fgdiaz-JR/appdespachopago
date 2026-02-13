@@ -3,18 +3,14 @@ const AUX_TRANSPORTE = 249095;
 const FESTIVOS_2026 = ["2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01", "2026-05-18", "2026-06-08", "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07", "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16", "2026-12-08", "2026-12-25"];
 
 function isFestivo(fechaStr) {
-    if (FESTIVOS_2026.includes(fechaStr)) return true;
-    const parts = fechaStr.split('-').map(Number);
-    const d = new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
-    const dow = d.getUTCDay();
-    return dow === 0;
+    return FESTIVOS_2026.includes(fechaStr);
 }
 
 function calculateHourlyRate(salarioMensual, weeklyHours = 44) {
     if (!salarioMensual || salarioMensual <= 0) return 0;
-    const annual = salarioMensual * 12;
-    const totalHoursYear = weeklyHours * 52;
-    return annual / totalHoursYear;
+    // Cálculo basado en 220 horas mensuales
+    const monthlyHours = 220;
+    return salarioMensual / monthlyHours;
 }
 
 function calculateIBC(salarioMensual) {
@@ -331,3 +327,5 @@ window.baseHoursForTurno = baseHoursForTurno;
 window.overtimeFactor = overtimeFactor;
 window.calculateDayPayment = calculateDayPayment;
 window.calculatePayrollSummary = calculatePayrollSummary;
+
+
