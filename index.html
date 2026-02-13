@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEspacho_pago - Calendario</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="brand"><h1>DEspacho_pago</h1></div>
+            <div class="profile-area" id="profile-area">
+                <button id="btn-login" class="btn" onclick="showLogin()">Iniciar sesión</button>
+            </div>
+        </header>
+
+        <!-- Pantalla de login -->
+        <section id="login-screen" class="module active">
+            <div class="card central-card auth-card">
+                <h2>Bienvenido a DEspacho_pago</h2>
+                <p>Inicia sesión o crea una cuenta para comenzar.</p>
+                <div class="input-field">
+                    <input type="text" id="login-cedula" placeholder="Cédula" inputmode="numeric">
+                </div>
+                <div class="input-field">
+                    <input type="password" id="login-clave" placeholder="Clave">
+                </div>
+                <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+                    <button onclick="loginUser()" class="btn-primary">Iniciar sesión</button>
+                    <button onclick="showRegister()" class="btn">Crear cuenta</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Registro rápido -->
+        <section id="register-screen" class="module">
+            <div class="card central-card auth-card">
+                <h2>Crear Cuenta</h2>
+                <p>Proporciona cédula, clave y salario base.</p>
+                <div class="input-field">
+                    <input type="text" id="reg-cedula" placeholder="Cédula" inputmode="numeric">
+                </div>
+                <div class="input-field">
+                    <input type="password" id="reg-clave" placeholder="Clave de acceso">
+                </div>
+                <div class="input-field">
+                    <input type="text" id="reg-nombre" placeholder="Nombre completo">
+                </div>
+                <div class="input-field">
+                    <input type="number" id="reg-salario" placeholder="Salario Mensual (Ej: 1750905)">
+                </div>
+                <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+                    <button onclick="registerUser()" class="btn-primary">Crear cuenta</button>
+                    <button onclick="showLogin()" class="btn">Volver</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="step-2" class="module">
+            <header class="calendar-header">
+                <div class="nav-month">
+                    <button onclick="cambiarMes(-1)">‹</button>
+                    <h2 id="mes-label">Marzo 2026</h2>
+                    <button onclick="cambiarMes(1)">›</button>
+                </div>
+                <div class="legend">
+                    <span class="dot work"></span> Trabajo 
+                    <span class="dot rest"></span> Descanso 
+                    <span class="dot vac"></span> Vacaciones
+                </div>
+            </header>
+            
+            <div class="calendar-wrapper">
+                <div class="weekdays">
+                    <div>LUN</div><div>MAR</div><div>MIÉ</div><div>JUE</div><div>VIE</div><div>SÁB</div><div>DOM</div>
+                </div>
+                <div id="calendar-grid" class="days-grid"></div>
+            </div>
+
+            <div class="footer-actions">
+                <button onclick="irAPaso(3)" class="btn-calculate">Calcular Nómina Final $</button>
+            </div>
+        </section>
+
+        <div id="modal-dia" class="modal">
+            <div class="modal-content">
+                <h3 id="modal-date-title">Editar Día</h3>
+                <div class="form-group">
+                    <label>Estado/Turno:</label>
+                    <select id="select-turno">
+                        <option value="descanso">😴 Día de Descanso</option>
+                        <option value="am">🌅 Mañana (6am - 2pm)</option>
+                        <option value="pm">🌇 Tarde (2pm - 10pm)</option>
+                        <option value="reduccion">⏱ Reduccion (4pm - 8pm)</option>
+                        <option value="nocturno">🌙 Noche (10pm - 6am)</option>
+                        <option value="vacaciones">🌴 Vacaciones</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Horas Extras (Opcional):</label>
+                    <input type="number" id="input-extras" placeholder="Cant. horas">
+                </div>
+                <div class="modal-btns">
+                    <button onclick="cerrarModal()" class="btn-cancel">Cerrar</button>
+                    <button onclick="guardarDia()" class="btn-save">Guardar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para editar perfil (elegante) -->
+        <div id="modal-profile" class="modal">
+            <div class="modal-content">
+                <h3>Editar Perfil</h3>
+                <div class="form-group">
+                    <label>Nombre completo</label>
+                    <input type="text" id="profile-nombre" placeholder="Nombre completo">
+                </div>
+                <div class="form-group">
+                    <label>Salario mensual</label>
+                    <input type="number" id="profile-salario" placeholder="Salario mensual">
+                </div>
+                <div class="form-group">
+                    <label>Nueva clave (opcional)</label>
+                    <input type="password" id="profile-clave" placeholder="Dejar vacío para mantener">
+                </div>
+                <div class="modal-btns">
+                    <button onclick="closeProfileModal()" class="btn-cancel">Cancelar</button>
+                    <button onclick="saveProfileModal()" class="btn-save">Guardar cambios</button>
+                </div>
+            </div>
+        </div>
+
+        <section id="step-3" class="module">
+            <button onclick="irAPaso(2)" class="btn-back">← Volver al Calendario</button>
+            <div class="card" id="resumen-final"></div>
+            <button onclick="generarPDF()" class="btn-primary">Descargar PDF Detallado</button>
+        </section>
+    </div>
+    <script src="calculations.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
