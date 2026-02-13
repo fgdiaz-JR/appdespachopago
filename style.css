@@ -1,4 +1,4 @@
- :root {
+:root {
   --primary: #2b8cff;
   --accent: #ffb020;
   --danger: #ff6b6b;
@@ -154,3 +154,4 @@ select option { color: #000; }
   .app-header { flex-direction:column; align-items:flex-start; gap:6px; }
   .profile-menu { right:12px; top:86px; }
 }
+
