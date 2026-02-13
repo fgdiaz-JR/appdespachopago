@@ -322,6 +322,7 @@ function renderCalendar() {
                             <div class="cs-option" data-value="descanso">Descanso</div>
                             <div class="cs-option" data-value="am">Mañana</div>
                             <div class="cs-option" data-value="pm">Tarde</div>
+                            <div class="cs-option" data-value="reduccion">Reduccion</div>
                             <div class="cs-option" data-value="nocturno">Noche</div>
                             <div class="cs-option" data-value="vacaciones">Vacaciones</div>
                         </div>
@@ -354,7 +355,7 @@ function renderCalendar() {
 
         // set current values
         if (csTrigger) {
-            const txt = (conf.turno && ({'descanso':'Descanso','am':'Mañana','pm':'Tarde','nocturno':'Noche','vacaciones':'Vacaciones'})[conf.turno]) || 'Descanso';
+            const txt = (conf.turno && ({'descanso':'Descanso','am':'Mañana','pm':'Tarde','reduccion':'Reduccion','nocturno':'Noche','vacaciones':'Vacaciones'})[conf.turno]) || 'Descanso';
             csTrigger.dataset.value = conf.turno || 'descanso';
             csTrigger.textContent = txt;
         }
@@ -589,7 +590,9 @@ function generarPDF() {
     const { jsPDF } = window.jspdf || {};
     if (!jsPDF) { alert('jsPDF no está disponible.'); return; }
 
-    const resumen = (typeof window.calculatePayrollSummary === 'function') ? window.calculatePayrollSummary(currentYear, currentMonth, db) : { rows: [], totalExtras:0, salud:0, pension:0, descuentos:0, neto:0 };
+    const resumen = (typeof window.calculatePayrollSummary === 'function')
+        ? window.calculatePayrollSummary(currentYear, currentMonth, db)
+        : { rows: [], totalExtras: 0, totalExtrasCount: 0, totalNightHours: 0, totalRecargoNocturno: 0, totalRecargoFestivo: 0, totalRecargos: 0, salud: 0, pension: 0, descuentos: 0, neto: 0, ibc: 0 };
 
     const doc = new jsPDF();
     doc.setFontSize(14);
@@ -598,34 +601,42 @@ function generarPDF() {
     doc.text(`Empleado: ${db.nombre || '-'}`, 14, 28);
     doc.text(`Periodo: ${new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric' }).format(new Date(currentYear, currentMonth, 1))}`, 14, 34);
 
-    // Resumen superior (formato moneda COP)
     const salarioFmt = Number(db.salario || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
-    const extrasFmt = Math.round(resumen.totalExtras).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const ibcFmt = Math.round(resumen.ibc || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const recargoNoctFmt = Math.round(resumen.totalRecargoNocturno || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const recargoFestFmt = Math.round(resumen.totalRecargoFestivo || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const recargosFmt = Math.round(resumen.totalRecargos || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const extrasFmt = Math.round(resumen.totalExtras || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
     const extrasCount = Math.round(resumen.totalExtrasCount || 0);
-    const saludFmt = Math.round(resumen.salud).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
-    const pensionFmt = Math.round(resumen.pension).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
-    const descuentosFmt = Math.round(resumen.descuentos).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
-    const netoFmt = Math.round(resumen.neto).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const nightHours = Math.round(resumen.totalNightHours || 0);
+    const saludFmt = Math.round(resumen.salud || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const pensionFmt = Math.round(resumen.pension || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const descuentosFmt = Math.round(resumen.descuentos || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+    const netoFmt = Math.round(resumen.neto || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
     doc.text(`Salario base: ${salarioFmt}`, 14, 44);
-    doc.text(`Total extras: ${extrasFmt} (${extrasCount}h)`, 14, 50);
-    doc.text(`Descuentos (Salud ${saludFmt}, Pensión ${pensionFmt}): ${descuentosFmt}`, 14, 56);
-    doc.text(`Neto a pagar: ${netoFmt}`, 14, 62);
+    doc.text(`IBC: ${ibcFmt}`, 14, 50);
+    doc.text(`Recargo nocturno: ${recargoNoctFmt} · Horas nocturnas: ${nightHours}h`, 14, 56);
+    doc.text(`Recargo festivo: ${recargoFestFmt} · Total recargos: ${recargosFmt}`, 14, 62);
+    doc.text(`Total extras: ${extrasFmt} (${extrasCount}h)`, 14, 68);
+    doc.text(`Descuentos (Salud ${saludFmt}, Pensión ${pensionFmt}): ${descuentosFmt}`, 14, 74);
+    doc.text(`Neto a pagar: ${netoFmt}`, 14, 80);
 
-    // Tabla de días
-    const head = [['Fecha','Turno','Horas Extras','Bruto Día','Festivo']];
+    const head = [['Fecha', 'Turno', 'Noct (h)', 'Rec. Noct', 'Rec. Fest', 'Extras (h)', 'Bruto Día']];
     const body = resumen.rows.map(r => [
         r.fecha,
         r.turno,
-        r.extras.toString(),
-        Math.round(r.brutoDia).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }),
-        r.esFest ? 'Sí' : 'No'
+        Math.round(r.nightHours || 0).toString(),
+        Math.round(r.recargoNocturno || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }),
+        Math.round(r.recargoFestivo || 0).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }),
+        (r.extras || 0).toString(),
+        Math.round(r.brutoDia).toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
     ]);
 
     if (doc.autoTable) {
-        doc.autoTable({ startY: 70, head: head, body: body, styles: { fontSize: 8 } });
+        doc.autoTable({ startY: 88, head: head, body: body, styles: { fontSize: 8 } });
     } else {
-        let y = 70;
+        let y = 88;
         doc.setFontSize(9);
         body.forEach(row => {
             doc.text(row.join('  |  '), 14, y);
