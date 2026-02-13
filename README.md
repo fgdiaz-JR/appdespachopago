@@ -16,6 +16,7 @@ Aplicación cliente para cálculo de nómina y calendario de turnos (prototipo).
 - **SMLV**: $1,750,905 COP
 - **Auxilio de transporte**: $249,095 COP (se paga a todos los colaboradores)
 - **Semana laboral**: 44 horas
+- **Cálculo valor hora**: Salario mensual ÷ 220 horas mensuales
 - **IBC (Ingreso Base de Cotización)**: Salario base + auxilio de transporte
 - **Descuentos**: Salud 4% y Pensión 4% sobre IBC
 
